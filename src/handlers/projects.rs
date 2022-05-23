@@ -6,11 +6,7 @@ use serde::Deserialize;
 
 use crate::{
     cloud::CloudClient,
-    database::{
-        add_invitation, add_project_to_user, add_user_to_project, delete_invitation_from_project,
-        delete_invitation_from_user, find_project_credentials, get_available_users,
-        ProjectRepository, UserRepository,
-    },
+    database::{ProjectRepository, UserRepository},
     errors::AppError,
     models::Project,
     utils::{generate_credentials, Claims},
@@ -104,19 +100,24 @@ pub struct AvailableUserQuery {
     username: String,
 }
 
+/**
+ * TODO: Move this handler in user handlers ?
+ */
 pub async fn available_users(
     app: web::Data<AppState>,
     path: web::Path<String>,
+    claims: Option<web::ReqData<Claims>>,
     query: web::Query<AvailableUserQuery>,
-) -> impl Responder {
-    let users = get_available_users(&app.database, path.to_string(), query.username.clone()).await;
-    match users {
-        Ok(result) => HttpResponse::Ok().json(result),
-        Err(err) => {
-            println!("{}", err);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+) -> Result<impl Responder, AppError> {
+    let user_id = claims.expect("No user_id").id;
+    let project_id = path.to_string();
+    UserRepository::new(app.database.clone())
+        .in_project(user_id, &project_id)
+        .await?;
+    UserRepository::new(app.database.clone())
+        .get_available_users(&project_id, &query.username)
+        .await
+        .map(|users| HttpResponse::Ok().json(users))
 }
 
 #[derive(Deserialize)]
@@ -127,71 +128,88 @@ pub struct InviteUserPayload {
 
 pub async fn invite_user(
     app: web::Data<AppState>,
+    claims: Option<web::ReqData<Claims>>,
     invitation: web::Json<InviteUserPayload>,
-) -> impl Responder {
-    let project_id = invitation.project.clone();
-    add_invitation(&app.database, &invitation.username, &project_id)
+) -> Result<impl Responder, AppError> {
+    let user_id = claims.expect("No user_id").id;
+    let project_id = &invitation.project;
+    let project_object_id =
+        ObjectId::from_str(&project_id).map_err(|error| AppError::db_error(error))?;
+
+    UserRepository::new(app.database.clone())
+        .in_project(user_id, &project_id)
+        .await?;
+    ProjectRepository::new(app.database.clone())
+        .add_invitation(project_object_id, invitation.username.to_string().as_str())
         .await
-        .unwrap();
-    HttpResponse::Ok().json({})
+        .map(|_| HttpResponse::Ok())
+    // TODO: Add invitation to user
 }
 
 pub async fn accept_invitation(
     app: web::Data<AppState>,
     claims: Option<web::ReqData<Claims>>,
     path: web::Path<String>,
-) -> impl Responder {
-    let user_id = &claims.expect("No user_id").sub;
+) -> Result<impl Responder, AppError> {
+    let user_id = &claims.expect("No user_id").id;
     let project_id = path.to_string();
-    add_project_to_user(&app.database, user_id.to_string(), project_id.clone())
+    let project_object_id =
+        ObjectId::from_str(&project_id).map_err(|error| AppError::db_error(error))?;
+
+    let user_repository = UserRepository::new(app.database.clone());
+    let project_repository = ProjectRepository::new(app.database.clone());
+
+    user_repository.add_project(*user_id, &project_id).await?;
+    user_repository
+        .remove_invitation(*user_id, &project_id)
+        .await?;
+    project_repository
+        .add_user(project_object_id, *user_id)
+        .await?;
+    project_repository
+        .remove_invitation(project_object_id, user_id.to_string().as_str())
+        .await?;
+
+    ProjectRepository::new(app.database.clone())
+        .get(project_object_id)
         .await
-        .unwrap();
-    add_user_to_project(&app.database, user_id.to_string(), project_id.clone())
-        .await
-        .unwrap();
-    delete_invitation_from_project(&app.database, user_id, &project_id)
-        .await
-        .unwrap();
-    delete_invitation_from_user(&app.database, user_id, &project_id)
-        .await
-        .unwrap();
-    let project = crate::database::get_project(&app.database, project_id).await;
-    match project {
-        Ok(result) => HttpResponse::Ok().json(result),
-        Err(err) => {
-            println!("{}", err);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+        .map_err(|error| AppError::db_error(error))
+        .map(|project| HttpResponse::Ok().json(project))
 }
 
 pub async fn deny_invitation(
     app: web::Data<AppState>,
     claims: Option<web::ReqData<Claims>>,
     path: web::Path<String>,
-) -> impl Responder {
-    let user_id = &claims.expect("No user_id").sub;
+) -> Result<impl Responder, AppError> {
+    let user_id = &claims.expect("No user_id").id;
     let project_id = path.to_string();
-    delete_invitation_from_project(&app.database, user_id, &project_id)
+    let project_object_id =
+        ObjectId::from_str(&project_id).map_err(|error| AppError::db_error(error))?;
+
+    UserRepository::new(app.database.clone())
+        .remove_invitation(*user_id, &project_id)
+        .await?;
+    ProjectRepository::new(app.database.clone())
+        .remove_invitation(project_object_id, user_id.to_string().as_str())
         .await
-        .unwrap();
-    delete_invitation_from_user(&app.database, user_id, &project_id)
-        .await
-        .unwrap();
-    let project = crate::database::get_project(&app.database, project_id).await;
-    match project {
-        Ok(result) => HttpResponse::Ok().json(result),
-        Err(err) => {
-            println!("{}", err);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+        .map(|_| HttpResponse::Ok())
 }
 
-pub async fn get_credentials(app: web::Data<AppState>, path: web::Path<String>) -> impl Responder {
-    let secret = find_project_credentials(&app.database, path.to_string()).await;
-    match secret {
-        Ok(result) => HttpResponse::Ok().json(result),
-        Err(_) => HttpResponse::InternalServerError().finish(),
-    }
+pub async fn get_credentials(
+    app: web::Data<AppState>,
+    claims: Option<web::ReqData<Claims>>,
+    path: web::Path<String>,
+) -> Result<impl Responder, AppError> {
+    let user_id = &claims.expect("No user_id").id;
+    let project_id = path.to_string();
+    let project_object_id =
+        ObjectId::from_str(&project_id).map_err(|error| AppError::db_error(error))?;
+    UserRepository::new(app.database.clone())
+        .in_project(*user_id, &project_id)
+        .await?;
+    ProjectRepository::new(app.database.clone())
+        .get_secret(project_object_id)
+        .await
+        .map(|secret| HttpResponse::Ok().json(secret))
 }

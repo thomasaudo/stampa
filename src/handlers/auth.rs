@@ -1,11 +1,12 @@
-use actix_web::{web, Responder, Result};
-use bcrypt::{hash, DEFAULT_COST};
+use actix_web::{web, HttpResponse, Responder, Result};
+use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::{create_user, get_user_by_username, verify_password},
+    database::UserRepository,
+    errors::AppError,
     models::User,
     utils::{encode_jwt, Claims},
     AppState,
@@ -31,58 +32,57 @@ struct RegisterResponse {
 pub async fn register(
     app: web::Data<AppState>,
     user: web::Json<RegisterPayload>,
-) -> Result<impl Responder, Box<dyn std::error::Error>> {
+) -> Result<impl Responder, AppError> {
     let username = &user.username;
     let password = &user.password;
-    let hashed_password = hash(password.as_str(), DEFAULT_COST)?;
+    let user_id = ObjectId::new();
+    let hashed_password =
+        hash(password.as_str(), DEFAULT_COST).map_err(|error| AppError::db_error(error))?;
 
-    let user_id = create_user(
-        &app.database,
-        User {
-            id: ObjectId::new(),
+    UserRepository::new(app.database.clone())
+        .create(User {
+            id: user_id,
             username: username.to_string(),
             password: hashed_password,
             projects: Vec::new(),
             invitations: Vec::new(),
-        },
-    )
-    .await;
-
-    let expiration = Utc::now() + Duration::days(365);
-
-    match user_id {
-        Ok(id) => {
-            let jwt_token = encode_jwt(Claims {
-                exp: expiration.timestamp() as usize,
-                sub: id.to_string(),
-                id,
-            })?;
-            Ok(web::Json(RegisterResponse { token: jwt_token }))
-        }
-        Err(_) => Err("Can not create the user.".into()),
-    }
+        })
+        .await
+        .map(|_| {
+            encode_jwt(Claims {
+                exp: (Utc::now() + Duration::days(365)).timestamp() as usize,
+                sub: user_id.to_string(),
+                id: user_id,
+            })
+            .map_err(|error| AppError::db_error(error))
+            .map(|jwt_token| HttpResponse::Ok().json(RegisterResponse { token: jwt_token }))
+        })
 }
 
 pub async fn login(
     app: web::Data<AppState>,
     user: web::Json<LoginPayload>,
-) -> Result<impl Responder, Box<dyn std::error::Error>> {
+) -> Result<impl Responder, AppError> {
     let username = &user.username;
     let password = &user.password;
 
-    let user_doc = get_user_by_username(&app.database, username.to_string()).await?;
+    let user_doc = UserRepository::new(app.database.clone())
+        .get_by_username(username)
+        .await?;
 
     let expiration = Utc::now() + Duration::days(365);
 
-    match verify_password(&password, &user_doc.password).await {
-        Ok(_) => {
-            let jwt_token = encode_jwt(Claims {
-                exp: expiration.timestamp() as usize,
-                sub: user_doc.id.to_string(),
-                id: user_doc.id,
-            })?;
-            Ok(web::Json(RegisterResponse { token: jwt_token }))
-        }
-        Err(error) => Err(error.into()),
+    let result =
+        verify(&password, &user_doc.password).map_err(|error| AppError::db_error(error))?;
+
+    match result {
+        true => encode_jwt(Claims {
+            exp: expiration.timestamp() as usize,
+            sub: user_doc.id.to_string(),
+            id: user_doc.id,
+        })
+        .map_err(|error| AppError::db_error(error))
+        .map(|token| HttpResponse::Ok().json(RegisterResponse { token: token })),
+        false => Err(AppError::login_error(username)),
     }
 }

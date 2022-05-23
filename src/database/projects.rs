@@ -8,23 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use crate::{errors::AppError, models::*};
-pub async fn get_projects(
-    database: &mongodb::Database,
-) -> Result<Vec<Project>, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let mongo_result = project_collection.find(None, None).await?;
-    Ok(mongo_result.try_collect().await?)
-}
-
-pub async fn get_project_invitations(
-    database: &mongodb::Database,
-    project_id: String,
-) -> Result<Vec<User>, Box<dyn std::error::Error>> {
-    let user_collection = database.collection::<User>("users");
-    let filter = doc! {"invitations": project_id.as_str()};
-    let mongo_result = user_collection.find(filter, None).await?;
-    Ok(mongo_result.try_collect().await?)
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InvitationProjection {
@@ -50,207 +33,6 @@ pub struct ProjectProjection {
 pub struct MemberProjection {
     pub username: String,
     pub _id: ObjectId,
-}
-
-pub async fn get_user_invitation(
-    database: &mongodb::Database,
-    user_id: String,
-) -> Result<Vec<InvitationProjection>, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let pipeline = vec![
-        doc! {
-            "$match": {
-                "invitations": user_id
-            }
-        },
-        doc! {
-            "$lookup": {
-                "from": "users",
-                "localField": "author",
-                "foreignField": "_id",
-                "as": "author_informations"
-            }
-        },
-        doc! {
-            "$project": {
-                "_id": 1,
-                "title": 1,
-                "region": 1,
-                "author": {"$first": "$author_informations.username" }
-            }
-        },
-    ];
-    let mut mongo_result = project_collection.aggregate(pipeline, None).await.unwrap();
-    let mut results: Vec<InvitationProjection> = Vec::new();
-    while let Some(result) = mongo_result.next().await {
-        let tmp: InvitationProjection = bson::from_document(result?)?;
-        results.push(tmp);
-    }
-    Ok(results)
-}
-
-pub async fn get_project_members(
-    database: &mongodb::Database,
-    project_id: String,
-) -> Result<Vec<User>, Box<dyn std::error::Error>> {
-    let user_collection = database.collection::<User>("users");
-    let filter = doc! {"projects": project_id.as_str()};
-    let mongo_result = user_collection.find(filter, None).await?;
-    Ok(mongo_result.try_collect().await?)
-}
-
-pub async fn create_project(
-    database: &mongodb::Database,
-    project: Project,
-) -> Result<ObjectId, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    //project.author = ObjectId::from_str(project.author).unwrap();
-    let insert_result = project_collection.insert_one(project, None).await.unwrap();
-    let project_id = insert_result.inserted_id.as_object_id();
-    match project_id {
-        Some(p) => Ok(p),
-        None => Err("Can not create project".into()),
-    }
-}
-
-pub async fn add_invitation(
-    database: &mongodb::Database,
-    user_id: &str,
-    project_id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let projectid = ObjectId::from_str(project_id).unwrap();
-    let userid = ObjectId::from_str(user_id).unwrap();
-    ();
-    project_collection
-        .update_one(
-            doc! {
-                "_id": projectid
-            },
-            doc! {
-                "$push": { "invitations": user_id }
-            },
-            None,
-        )
-        .await
-        .unwrap();
-    let user_collection = database.collection::<User>("users");
-    user_collection
-        .update_one(
-            doc! {
-                "_id": userid
-            },
-            doc! {
-                "$push": { "invitations": project_id }
-            },
-            None,
-        )
-        .await
-        .unwrap();
-    Ok(())
-}
-
-pub async fn delete_invitation_from_project(
-    database: &mongodb::Database,
-    user_id: &String,
-    project_id: &String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let update_result = project_collection
-        .update_one(
-            doc! {
-                "_id": ObjectId::from_str(project_id.as_str())?
-            },
-            doc! {
-                "$pull": { "invitations": user_id }
-            },
-            None,
-        )
-        .await?;
-    match update_result.modified_count {
-        1 => Ok(true),
-        _ => Err("Can not delete invitation".into()),
-    }
-}
-
-pub async fn add_avatar_to_project(
-    database: &mongodb::Database,
-    avatar_id: String,
-    project_id: String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let update_result = project_collection
-        .update_one(
-            doc! {
-                "_id": ObjectId::from_str(project_id.as_str()).unwrap()
-            },
-            doc! {
-                "$push": { "avatars": avatar_id }
-            },
-            None,
-        )
-        .await?;
-    match update_result.matched_count {
-        1 => Ok(true),
-        _ => Err("Can not add the avatar to the project.".into()),
-    }
-}
-
-pub async fn get_available_users(
-    database: &mongodb::Database,
-    project_id: String,
-    username: String,
-) -> Result<Vec<AvailableUser>, Box<dyn std::error::Error>> {
-    let user_collection = database.collection::<User>("users");
-    let username_regex = Regex {
-        pattern: format!("^{}", username),
-        options: String::new(),
-    };
-    let filter = doc! {"projects": {"$ne": project_id.as_str()}, "username": username_regex};
-    let projection = doc! {"username": 1};
-    let options = FindOptions::builder()
-        .limit(5)
-        .projection(projection)
-        .build();
-    let mongo_result = user_collection
-        .clone_with_type::<AvailableUser>()
-        .find(filter, options)
-        .await?;
-    let results = mongo_result.try_collect().await?;
-    Ok(results)
-}
-
-pub async fn add_user_to_project(
-    database: &mongodb::Database,
-    user_id: String,
-    project_id: String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let update_result = project_collection
-        .update_one(
-            doc! {
-                "_id": ObjectId::from_str(project_id.as_str()).unwrap()
-            },
-            doc! {
-                "$push": { "members": ObjectId::from_str(user_id.as_str()).unwrap() }
-            },
-            None,
-        )
-        .await?;
-    match update_result.matched_count {
-        1 => Ok(true),
-        _ => Err("Can not add the user to the project.".into()),
-    }
-}
-
-pub async fn find_project_credentials(
-    database: &mongodb::Database,
-    project_id: String,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let project_collection = database.collection::<Project>("projects");
-    let filter = doc! {"_id": ObjectId::from_str(&project_id).unwrap()};
-    let mongo_result = project_collection.find_one(filter, None).await?;
-    Ok(mongo_result.unwrap().api_secret)
 }
 
 pub struct ProjectRepository {
@@ -331,12 +113,9 @@ impl ProjectRepository {
             .map_err(|error| AppError::db_error(error))
     }
 
-    pub async fn add_user(
-        &self,
-        project_id: ObjectId,
-        user_id: ObjectId,
-    ) -> Result<bool, AppError> {
-        self.collection
+    pub async fn add_user(&self, project_id: ObjectId, user_id: ObjectId) -> Result<(), AppError> {
+        let result = self
+            .collection
             .update_one(
                 doc! {
                     "_id": project_id
@@ -348,13 +127,11 @@ impl ProjectRepository {
             )
             .await
             .map_err(|error| AppError::db_error(error))
-            .map(|update_result| {
-                if update_result.modified_count == 0 {
-                    true
-                } else {
-                    false
-                }
-            })
+            .map(|update_result| update_result.modified_count)?;
+        match result {
+            1 => Ok(()),
+            _ => Err(AppError::db_error("Internal error.")),
+        }
     }
 
     pub async fn get_user_projects(&self, user_id: ObjectId) -> Result<Vec<Project>, AppError> {
@@ -410,5 +187,62 @@ impl ProjectRepository {
             results.push(tmp);
         }
         Ok(results)
+    }
+
+    pub async fn add_invitation(self, project_id: ObjectId, user_id: &str) -> Result<(), AppError> {
+        let result = self
+            .collection
+            .update_one(
+                doc! {
+                    "_id": project_id
+                },
+                doc! {
+                    "$push": { "invitations": user_id }
+                },
+                None,
+            )
+            .await
+            .map_err(|error| AppError::db_error(error))
+            .map(|update_result| update_result.modified_count)?;
+        match result {
+            1 => Ok(()),
+            _ => Err(AppError::db_error("Internal error.")),
+        }
+    }
+
+    pub async fn remove_invitation(
+        self,
+        project_id: ObjectId,
+        user_id: &str,
+    ) -> Result<(), AppError> {
+        let result = self
+            .collection
+            .update_one(
+                doc! {
+                    "_id": project_id
+                },
+                doc! {
+                    "$pull": { "invitations": user_id }
+                },
+                None,
+            )
+            .await
+            .map_err(|error| AppError::db_error(error))
+            .map(|update_result| update_result.modified_count)?;
+        match result {
+            1 => Ok(()),
+            _ => Err(AppError::db_error("Internal error.")),
+        }
+    }
+
+    pub async fn get_secret(self, project_id: ObjectId) -> Result<String, AppError> {
+        let filter = doc! {"_id": project_id};
+        self.collection
+            .find_one(filter, None)
+            .await
+            .map(|project| project)
+            .map_err(|error| AppError::db_error(error))?
+            .ok_or(AppError::db_error("xd"))
+            .map(|project| project.api_secret)
     }
 }

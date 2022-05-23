@@ -9,6 +9,7 @@ pub enum AppErrorType {
     NotFoundError,
     NotInProject,
     S3Error,
+    LoginError,
 }
 
 #[derive(Debug)]
@@ -65,11 +66,18 @@ impl AppError {
     }
 
     pub fn s3_error(error: impl ToString) -> AppError {
-        println!("{}", error.to_string());
         AppError {
             message: Some(format!("Internal error")),
             cause: Some(error.to_string()),
             error_type: crate::errors::AppErrorType::NotInProject,
+        }
+    }
+
+    pub fn login_error(username: impl ToString) -> AppError {
+        AppError {
+            message: Some(format!("Can not login user {}.", username.to_string())),
+            cause: Some(format!("Can not login user {}.", username.to_string())),
+            error_type: crate::errors::AppErrorType::LoginError,
         }
     }
 }
@@ -91,6 +99,7 @@ impl ResponseError for AppError {
             AppErrorType::DbError => StatusCode::INTERNAL_SERVER_ERROR,
             AppErrorType::NotFoundError => StatusCode::NOT_FOUND,
             AppErrorType::NotInProject => StatusCode::UNAUTHORIZED,
+            AppErrorType::LoginError => StatusCode::UNAUTHORIZED,
             AppErrorType::S3Error => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
