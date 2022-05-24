@@ -1,6 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 
-use crate::{database::UserRepository, errors::AppError, utils::Claims, AppState};
+use crate::{errors::AppError, repositories::UserRepository, utils::Claims, AppState};
 
 pub async fn me(
     app: web::Data<AppState>,

@@ -5,9 +5,9 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    database::UserRepository,
     errors::AppError,
     models::User,
+    repositories::UserRepository,
     utils::{encode_jwt, Claims},
     AppState,
 };

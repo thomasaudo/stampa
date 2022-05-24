@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     cloud::CloudClient,
-    database::{ProjectRepository, UserRepository},
     errors::AppError,
     models::Avatar,
+    repositories::{ProjectRepository, UserRepository},
     utils::Claims,
     AppState,
 };

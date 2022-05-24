@@ -6,9 +6,9 @@ use serde::Deserialize;
 
 use crate::{
     cloud::CloudClient,
-    database::{ProjectRepository, UserRepository},
     errors::AppError,
     models::Project,
+    repositories::{ProjectRepository, UserRepository},
     utils::{generate_credentials, Claims},
     AppState,
 };
