@@ -15,13 +15,14 @@ pub struct CloudClient {
 }
 
 impl CloudClient {
-    pub fn new(bucket_name: String, region: String) -> CloudClient {
-        let s3_region = Region::from_str(region.as_str()).unwrap();
-        CloudClient {
+    pub fn new(bucket_name: String, region: String) -> Result<CloudClient, AppError> {
+        let s3_region = Region::from_str(region.as_str())
+            .map_err(|_| AppError::s3_error("Can not load region."))?;
+        Ok(CloudClient {
             region,
             bucket_name,
             s3: S3Client::new(s3_region),
-        }
+        })
     }
 
     pub async fn create_bucket(bucket_name: String, region: String) -> Result<String, AppError> {
@@ -51,8 +52,9 @@ impl CloudClient {
         )
     }
 
-    pub async fn put_object(&self, path: &str, key: &str) -> String {
-        let mut file = std::fs::File::open(path).unwrap();
+    pub async fn put_object(&self, path: &str, key: &str) -> Result<String, AppError> {
+        let mut file = std::fs::File::open(path)
+            .map_err(|_| AppError::fs_error("Can not read temporary avatar."))?;
         let mut contents: Vec<u8> = Vec::new();
         let _ = file.read_to_end(&mut contents);
 
@@ -67,24 +69,25 @@ impl CloudClient {
         self.s3
             .put_object(put_request)
             .await
-            .expect("Failed to put S3 object");
-
-        self.url(key)
+            .map_err(|error| AppError::s3_error(error))
+            .map(|_| self.url(key))
     }
 
-    pub async fn get_object(&self, key: &str) -> ByteStream {
+    pub async fn get_object(&self, key: &str) -> Result<ByteStream, AppError> {
         let get_request = GetObjectRequest {
             bucket: self.bucket_name.to_owned(),
             key: key.to_owned(),
             ..Default::default()
         };
 
-        let response = self
-            .s3
+        self.s3
             .get_object(get_request)
             .await
-            .expect("Failed to load S3 Object.");
-        let data = response.body.unwrap();
-        data
+            .map_err(|_| AppError::s3_error("Can not get object."))
+            .map(|response| {
+                response
+                    .body
+                    .ok_or(AppError::s3_error("Can not get the object body."))
+            })?
     }
 }

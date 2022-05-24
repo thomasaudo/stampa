@@ -1,11 +1,9 @@
 use futures::{StreamExt, TryStreamExt};
 use mongodb::{
-    bson::{self, doc, oid::ObjectId, Regex},
-    options::FindOptions,
+    bson::{self, doc, oid::ObjectId},
     Collection, Database,
 };
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
 use crate::{errors::AppError, models::*};
 
@@ -122,6 +120,32 @@ impl ProjectRepository {
                 },
                 doc! {
                     "$push": { "members": user_id }
+                },
+                None,
+            )
+            .await
+            .map_err(|error| AppError::db_error(error))
+            .map(|update_result| update_result.modified_count)?;
+        match result {
+            1 => Ok(()),
+            _ => Err(AppError::db_error("Internal error.")),
+        }
+    }
+
+    pub async fn add_avatar(&self, project_id: ObjectId, avatar: Avatar) -> Result<(), AppError> {
+        let result = self
+            .collection
+            .update_one(
+                doc! {
+                    "_id": project_id
+                },
+                doc! {
+                    "$push": { "avatars": doc!{
+                        "_id": avatar._id,
+                        "name": avatar.name,
+                         "mime_type": avatar.mime_type,
+                         "url": avatar.url
+                    } }
                 },
                 None,
             )

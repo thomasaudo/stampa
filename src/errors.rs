@@ -73,6 +73,14 @@ impl AppError {
         }
     }
 
+    pub fn fs_error(error: impl ToString) -> AppError {
+        AppError {
+            message: Some(format!("Internal error")),
+            cause: Some(error.to_string()),
+            error_type: crate::errors::AppErrorType::NotInProject,
+        }
+    }
+
     pub fn login_error(username: impl ToString) -> AppError {
         AppError {
             message: Some(format!("Can not login user {}.", username.to_string())),
