@@ -29,6 +29,7 @@ actix-cors = "0.6.1"
 actix-web = { version = "4", default_features = false }
 actix-multipart = "0.4.0"
 actix-easy-multipart = "2.1.1"
+actix-rt = "2.7.0"
 
 base64 = "0.13.0"
 tokio = { version = "1", features = ["full"] }
