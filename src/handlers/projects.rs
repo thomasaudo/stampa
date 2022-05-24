@@ -39,7 +39,7 @@ pub async fn get_project(
     project.map(|result| HttpResponse::Ok().json(result))
 }
 
-pub async fn get_user_projects(
+pub async fn get_projects(
     app: web::Data<AppState>,
     claims: Option<web::ReqData<Claims>>,
 ) -> Result<impl Responder, AppError> {
@@ -100,10 +100,7 @@ pub struct AvailableUserQuery {
     username: String,
 }
 
-/**
- * TODO: Move this handler in user handlers ?
- */
-pub async fn available_users(
+pub async fn get_available_users(
     app: web::Data<AppState>,
     path: web::Path<String>,
     claims: Option<web::ReqData<Claims>>,
@@ -138,6 +135,9 @@ pub async fn invite_user(
 
     UserRepository::new(app.database.clone())
         .in_project(user_id, &project_id)
+        .await?;
+    UserRepository::new(app.database.clone())
+        .add_invitation(user_id, project_id)
         .await?;
     ProjectRepository::new(app.database.clone())
         .add_invitation(project_object_id, invitation.username.to_string().as_str())
@@ -196,7 +196,7 @@ pub async fn deny_invitation(
         .map(|_| HttpResponse::Ok())
 }
 
-pub async fn get_credentials(
+pub async fn get_project_credentials(
     app: web::Data<AppState>,
     claims: Option<web::ReqData<Claims>>,
     path: web::Path<String>,

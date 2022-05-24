@@ -1,6 +1,6 @@
 use crate::handlers::{
-    accept_invitation, available_users, create_avatar, create_project, deny_invitation,
-    get_credentials, get_invitations, get_project, get_user_projects, invite_user, login, me,
+    accept_invitation, create_avatar, create_project, deny_invitation, get_available_users,
+    get_invitations, get_project, get_project_credentials, get_projects, invite_user, login, me,
     register,
 };
 use actix_web::web::{self, ServiceConfig};
@@ -11,15 +11,18 @@ pub fn project_router(cfg: &mut ServiceConfig) {
             // Create a project
             .route("", web::post().to(create_project))
             // Get projects
-            .route("", web::get().to(get_user_projects))
+            .route("", web::get().to(get_projects))
             // Get specific project
             .route("/{project_id}", web::get().to(get_project))
             // Get specific project credentials
-            .route("/{project_id}/credentials", web::get().to(get_credentials))
+            .route(
+                "/{project_id}/credentials",
+                web::get().to(get_project_credentials),
+            )
             // Get specific project available_users
             .route(
                 "/{project_id}/available_users",
-                web::get().to(available_users),
+                web::get().to(get_available_users),
             ),
     );
 }

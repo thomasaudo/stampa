@@ -121,6 +121,27 @@ impl UserRepository {
             .map_err(|error| AppError::db_error(error))
     }
 
+    pub async fn add_invitation(self, user_id: ObjectId, project_id: &str) -> Result<(), AppError> {
+        let result = self
+            .collection
+            .update_one(
+                doc! {
+                    "_id": user_id
+                },
+                doc! {
+                    "$push": { "invitations": project_id }
+                },
+                None,
+            )
+            .await
+            .map_err(|error| AppError::db_error(error))
+            .map(|update_result| update_result.modified_count)?;
+        match result {
+            1 => Ok(()),
+            _ => Err(AppError::db_error("Internal error.")),
+        }
+    }
+
     pub async fn remove_invitation(
         self,
         user_id: ObjectId,
