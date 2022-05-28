@@ -19,6 +19,7 @@ pub struct User {
     pub id: bson::oid::ObjectId,
     pub username: String,
     pub password: String,
+    pub avatar: String,
     pub projects: Vec<String>,
     pub invitations: Vec<String>,
 }

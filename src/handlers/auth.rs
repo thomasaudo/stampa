@@ -5,6 +5,8 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    avatars::AvatarService,
+    cloud::CloudClient,
     errors::AppError,
     models::User,
     repositories::UserRepository,
@@ -33,12 +35,18 @@ pub async fn register(
     app: web::Data<AppState>,
     user: web::Json<RegisterPayload>,
 ) -> Result<impl Responder, AppError> {
+    println!("Registering new user");
     let username = &user.username;
     let password = &user.password;
     let user_id = ObjectId::new();
     let hashed_password =
         hash(password.as_str(), DEFAULT_COST).map_err(|error| AppError::db_error(error))?;
-
+    let user_avatar = AvatarService::generate_avatar(&user_id.to_string(), &username[0..2])?;
+    println!("Avatar generated");
+    let avatar_url = CloudClient::new("user-avatar-stampa".to_string(), "eu-west-3".to_string())?
+        .put_object(&user_avatar, &user_id.to_string())
+        .await?;
+    println!("Avatar stored");
     UserRepository::new(app.database.clone())
         .create(User {
             id: user_id,
@@ -46,6 +54,7 @@ pub async fn register(
             password: hashed_password,
             projects: Vec::new(),
             invitations: Vec::new(),
+            avatar: avatar_url,
         })
         .await
         .map(|_| {

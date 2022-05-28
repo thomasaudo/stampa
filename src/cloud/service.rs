@@ -69,7 +69,10 @@ impl CloudClient {
         self.s3
             .put_object(put_request)
             .await
-            .map_err(|error| AppError::s3_error(error))
+            .map_err(|error| {
+                println!("{}", error);
+                AppError::s3_error(error)
+            })
             .map(|_| self.url(key))
     }
 

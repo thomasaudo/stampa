@@ -80,10 +80,7 @@ pub async fn generate_avatar(
     app: web::Data<AppState>,
     claims: Option<web::ReqData<Claims>>,
 ) -> Result<impl Responder, AppError> {
-    let surface = AvatarService::generate_avatar("TA")?;
-
-    let mut file = File::create("file.png").unwrap();
-    surface.write_to_png(&mut file).unwrap();
+    let surface = AvatarService::generate_avatar("xx", "TA")?;
 
     Ok(HttpResponse::Ok())
 }
