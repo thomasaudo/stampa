@@ -1,7 +1,7 @@
 use crate::handlers::{
-    accept_invitation, create_avatar, create_project, deny_invitation, get_available_users,
-    get_invitations, get_project, get_project_credentials, get_projects, invite_user, login, me,
-    register,
+    accept_invitation, create_avatar, create_project, deny_invitation, generate_avatar,
+    get_available_users, get_invitations, get_project, get_project_credentials, get_projects,
+    invite_user, login, me, register,
 };
 use actix_web::web::{self, ServiceConfig};
 
@@ -47,8 +47,13 @@ pub fn user_router(cfg: &mut ServiceConfig) {
 }
 
 pub fn avatar_router(cfg: &mut ServiceConfig) {
-    // Add an avatar
-    cfg.service(web::scope("/avatar").route("", web::post().to(create_avatar)));
+    cfg.service(
+        web::scope("/avatar")
+            // Add an avatar (Image)
+            .route("", web::post().to(create_avatar))
+            // Generate an avatar (2 letters)
+            .route("/generate", web::post().to(generate_avatar)),
+    );
 }
 
 pub fn public_router(cfg: &mut ServiceConfig) {

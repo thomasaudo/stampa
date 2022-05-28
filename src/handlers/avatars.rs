@@ -1,10 +1,11 @@
-use std::str::FromStr;
+use std::{fs::File, str::FromStr};
 
 use actix_web::{web, HttpResponse, Responder};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    avatars::AvatarService,
     cloud::CloudClient,
     errors::AppError,
     models::Avatar,
@@ -73,4 +74,16 @@ pub async fn create_avatar(
         .add_avatar(project_object_id, new_avatar)
         .await
         .map(|_| HttpResponse::Ok().json(avatar))
+}
+
+pub async fn generate_avatar(
+    app: web::Data<AppState>,
+    claims: Option<web::ReqData<Claims>>,
+) -> Result<impl Responder, AppError> {
+    let surface = AvatarService::generate_avatar("TA")?;
+
+    let mut file = File::create("file.png").unwrap();
+    surface.write_to_png(&mut file).unwrap();
+
+    Ok(HttpResponse::Ok())
 }

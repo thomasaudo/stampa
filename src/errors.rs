@@ -10,6 +10,7 @@ pub enum AppErrorType {
     NotInProject,
     S3Error,
     LoginError,
+    AvatarGenerationError,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,14 @@ impl AppError {
         }
     }
 
+    pub fn avatat_generation_error(error: impl ToString) -> AppError {
+        AppError {
+            message: None,
+            cause: Some(error.to_string()),
+            error_type: crate::errors::AppErrorType::DbError,
+        }
+    }
+
     pub fn not_found_error(ressource_id: impl ToString) -> AppError {
         AppError {
             message: Some(format!(
@@ -50,7 +59,7 @@ impl AppError {
                 ressource_id.to_string()
             )),
             cause: Some(ressource_id.to_string()),
-            error_type: crate::errors::AppErrorType::NotFoundError,
+            error_type: crate::errors::AppErrorType::AvatarGenerationError,
         }
     }
 
@@ -109,6 +118,7 @@ impl ResponseError for AppError {
             AppErrorType::NotInProject => StatusCode::UNAUTHORIZED,
             AppErrorType::LoginError => StatusCode::UNAUTHORIZED,
             AppErrorType::S3Error => StatusCode::INTERNAL_SERVER_ERROR,
+            AppErrorType::AvatarGenerationError => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 

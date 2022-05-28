@@ -1,3 +1,4 @@
+pub mod avatars;
 pub mod cloud;
 pub mod config;
 pub mod errors;
