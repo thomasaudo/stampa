@@ -43,7 +43,7 @@ pub async fn register(
         hash(password.as_str(), DEFAULT_COST).map_err(|error| AppError::db_error(error))?;
     let user_avatar = AvatarService::generate_avatar(&user_id.to_string(), &username[0..2])?;
     println!("Avatar generated");
-    let avatar_url = CloudClient::new("user-avatar-stampa".to_string(), "eu-west-3".to_string())?
+    let avatar_url = CloudClient::new_application_client()?
         .put_object(&user_avatar, &user_id.to_string())
         .await?;
     println!("Avatar stored");

@@ -25,6 +25,16 @@ impl CloudClient {
         })
     }
 
+    pub fn new_application_client() -> Result<CloudClient, AppError> {
+        let s3_region = Region::from_str("eu-west-3")
+            .map_err(|_| AppError::s3_error("Can not load region."))?;
+        Ok(CloudClient {
+            region: "eu-west-3".to_string(),
+            bucket_name: "user-avatar-stampa".to_string(),
+            s3: S3Client::new(s3_region),
+        })
+    }
+
     pub async fn create_bucket(bucket_name: String, region: String) -> Result<String, AppError> {
         let s3_region =
             Region::from_str(region.as_str()).map_err(|error| AppError::s3_error(error))?;
