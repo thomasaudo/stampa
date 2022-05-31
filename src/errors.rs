@@ -11,6 +11,8 @@ pub enum AppErrorType {
     S3Error,
     LoginError,
     AvatarGenerationError,
+    UserExistError,
+    UnvalidFormError,
 }
 
 #[derive(Debug)]
@@ -97,6 +99,22 @@ impl AppError {
             error_type: crate::errors::AppErrorType::LoginError,
         }
     }
+
+    pub fn user_exist_error(username: impl ToString) -> AppError {
+        AppError {
+            message: Some(format!("User {} already exist.", username.to_string())),
+            cause: Some(format!("User {} already exist", username.to_string())),
+            error_type: crate::errors::AppErrorType::UserExistError,
+        }
+    }
+
+    pub fn unvalid_form_error(error: impl ToString) -> AppError {
+        AppError {
+            message: Some(error.to_string()),
+            cause: Some(error.to_string()),
+            error_type: crate::errors::AppErrorType::UnvalidFormError,
+        }
+    }
 }
 
 impl Display for AppError {
@@ -119,6 +137,8 @@ impl ResponseError for AppError {
             AppErrorType::LoginError => StatusCode::UNAUTHORIZED,
             AppErrorType::S3Error => StatusCode::INTERNAL_SERVER_ERROR,
             AppErrorType::AvatarGenerationError => StatusCode::INTERNAL_SERVER_ERROR,
+            AppErrorType::UserExistError => StatusCode::UNAUTHORIZED,
+            AppErrorType::UnvalidFormError => StatusCode::UNAUTHORIZED,
         }
     }
 

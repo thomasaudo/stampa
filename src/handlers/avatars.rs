@@ -5,7 +5,7 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    avatars::AvatarService,
+    avatars::AvatarClient,
     cloud::CloudClient,
     errors::AppError,
     models::Avatar,
@@ -74,13 +74,4 @@ pub async fn create_avatar(
         .add_avatar(project_object_id, new_avatar)
         .await
         .map(|_| HttpResponse::Ok().json(avatar))
-}
-
-pub async fn generate_avatar(
-    app: web::Data<AppState>,
-    claims: Option<web::ReqData<Claims>>,
-) -> Result<impl Responder, AppError> {
-    let surface = AvatarService::generate_avatar("xx", "TA")?;
-
-    Ok(HttpResponse::Ok())
 }

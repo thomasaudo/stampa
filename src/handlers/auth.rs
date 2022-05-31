@@ -3,9 +3,10 @@ use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::{
-    avatars::AvatarService,
+    avatars::AvatarClient,
     cloud::CloudClient,
     errors::AppError,
     models::User,
@@ -14,15 +15,19 @@ use crate::{
     AppState,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate, Debug)]
 pub struct RegisterPayload {
+    #[validate(length(min = 6))]
     username: String,
+    #[validate(length(min = 6))]
     password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct LoginPayload {
+    #[validate(length(min = 6))]
     username: String,
+    #[validate(length(min = 6))]
     password: String,
 }
 
@@ -35,19 +40,26 @@ pub async fn register(
     app: web::Data<AppState>,
     user: web::Json<RegisterPayload>,
 ) -> Result<impl Responder, AppError> {
-    println!("Registering new user");
+    user.validate()
+        .map_err(|error| AppError::unvalid_form_error(error))?;
+
     let username = &user.username;
     let password = &user.password;
     let user_id = ObjectId::new();
+
+    let user_repository = UserRepository::new(app.database.clone());
+    user_repository.exist(username).await?;
+
     let hashed_password =
         hash(password.as_str(), DEFAULT_COST).map_err(|error| AppError::db_error(error))?;
-    let user_avatar = AvatarService::generate_avatar(&user_id.to_string(), &username[0..2])?;
-    println!("Avatar generated");
+
+    let user_avatar = AvatarClient::generate_avatar(&user_id.to_string(), &username[0..2])?;
+
     let avatar_url = CloudClient::new_application_client()?
         .put_object(&user_avatar, &user_id.to_string())
         .await?;
-    println!("Avatar stored");
-    UserRepository::new(app.database.clone())
+
+    user_repository
         .create(User {
             id: user_id,
             username: username.to_string(),
@@ -72,6 +84,9 @@ pub async fn login(
     app: web::Data<AppState>,
     user: web::Json<LoginPayload>,
 ) -> Result<impl Responder, AppError> {
+    user.validate()
+        .map_err(|error| AppError::unvalid_form_error(error))?;
+
     let username = &user.username;
     let password = &user.password;
 

@@ -4,9 +4,9 @@ use cairo_rs::{Context, FontSlant, FontWeight, Format, ImageSurface};
 
 use crate::errors::AppError;
 
-pub struct AvatarService {}
+pub struct AvatarClient {}
 
-impl AvatarService {
+impl AvatarClient {
     pub fn generate_avatar(key: &str, text: &str) -> Result<String, AppError> {
         let surface = ImageSurface::create(Format::ARgb32, 200, 200)
             .map_err(|error| AppError::avatat_generation_error(error))?;

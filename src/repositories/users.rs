@@ -61,6 +61,18 @@ impl UserRepository {
             .ok_or(AppError::not_found_error(username))
     }
 
+    pub async fn exist(&self, username: &str) -> Result<(), AppError> {
+        let user = self
+            .collection
+            .find_one(doc! {"username": username}, None)
+            .await
+            .map_err(|error| AppError::db_error(error))?;
+        match user {
+            Some(_) => Err(AppError::user_exist_error(username)),
+            None => Ok(()),
+        }
+    }
+
     pub async fn in_project(&self, user_id: ObjectId, project_id: &str) -> Result<(), AppError> {
         self.collection
             .find_one(doc! {"_id": user_id, "projects": project_id}, None)

@@ -2,6 +2,7 @@ use std::net::TcpListener;
 
 use actix_web::web::Data;
 use mongodb::Database;
+use uuid::Uuid;
 
 use crate::{startup::run, AppState};
 
@@ -14,8 +15,8 @@ pub async fn spawn_app() -> TestApp {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
-    let configuration = crate::config::Config::from_env().unwrap();
-
+    let mut configuration = crate::config::Config::from_env().unwrap();
+    configuration.database_name = Uuid::new_v4().to_string();
     let database = configuration.connect_mongo().await.unwrap();
     let app_state = Data::new(AppState {
         database: database.clone(),
