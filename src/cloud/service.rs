@@ -1,5 +1,7 @@
 use std::{io::Read, str::FromStr};
 
+use aws_sdk_rekognition::model::{BoundingBox, bounding_box};
+use image::DynamicImage;
 use rusoto_core::{ByteStream, Region};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, GetObjectRequest, PutObjectRequest, S3Client,
@@ -7,7 +9,7 @@ use rusoto_s3::{
 };
 
 use crate::errors::AppError;
-
+    
 pub struct CloudClient {
     s3: S3Client,
     bucket_name: String,
@@ -102,5 +104,37 @@ impl CloudClient {
                     .body
                     .ok_or(AppError::s3_error("Can not get the object body."))
             })?
+    }
+
+    pub async fn detect_face(
+        client: aws_sdk_rekognition::Client,
+        image: aws_sdk_rekognition::model::Image,
+    ) -> Result<BoundingBox, AppError> {
+        Ok(client
+            .detect_faces()
+            .image(image)
+            .attributes(aws_sdk_rekognition::model::Attribute::All)
+            .send()
+            .await
+            .map_err(|error| AppError::s3_error(error))?
+            .face_details
+            .ok_or(AppError::s3_error("Can not get face details."))?[0]
+            .bounding_box()
+            .ok_or(AppError::s3_error("Can not get bouding boxes."))?
+            .to_owned())
+    }
+
+    pub fn crop_face(
+        mut avatar: DynamicImage,
+        h: u32,
+        w: u32,
+        bounding_box: BoundingBox,
+    ) -> DynamicImage {
+        let left = bounding_box.left().unwrap() * w as f32;
+        let top = bounding_box.top().unwrap() * h as f32;
+        let width = bounding_box.width().unwrap() * w as f32;
+        let height = bounding_box.height().unwrap() * h as f32;
+        
+        avatar.crop(left as u32, top as u32, width as u32, height as u32)
     }
 }

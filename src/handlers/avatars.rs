@@ -1,6 +1,7 @@
 use std::{fs::File, str::FromStr};
 
 use actix_web::{web, HttpResponse, Responder};
+use aws_config::timeout::Http;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
@@ -74,4 +75,19 @@ pub async fn create_avatar(
         .add_avatar(project_object_id, new_avatar)
         .await
         .map(|_| HttpResponse::Ok().json(avatar))
+}
+
+pub async fn get_avatar(
+    avatar: web::Json<AvatarUpload>,
+    app: web::Data<AppState>,
+    claims: Option<web::ReqData<Claims>>,
+) -> Result<impl Responder, AppError> {
+    let user_id = claims.unwrap().id;
+    let repository = ProjectRepository::new(app.database.clone());
+
+    UserRepository::new(app.database.clone())
+        .in_project(user_id, &avatar.project)
+        .await?;
+
+    Ok(HttpResponse::Ok())
 }

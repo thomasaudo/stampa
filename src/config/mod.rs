@@ -21,6 +21,15 @@ impl Config {
             .map_err(|_| "Failed to load configuration from environment.".into())
     }
 
+    pub fn load_test_configuration() -> Result<Config, Box<dyn std::error::Error>> {
+        dotenv().ok();
+        let mut config = config::Config::new();
+        config.merge(config::Environment::default())?;
+        config
+            .try_into()
+            .map_err(|_| "Failed to load configuration from environment.".into())
+    }
+
     pub async fn connect_mongo(&self) -> Result<mongodb::Database, Box<dyn std::error::Error>> {
         let client = mongodb::Client::with_uri_str(&self.database_url)
             .await
